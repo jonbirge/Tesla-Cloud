@@ -65,6 +65,11 @@
         "icon": "https://www.google.com/s2/favicons?domain=pg.com&sz=64"
     },
     {
+        "StockName": "SpaceX",
+        "Symbol": "SPCX",
+        "icon": "https://www.google.com/s2/favicons?domain=spacex.com&sz=64"
+    },
+    {
         "StockName": "Tesla",
         "Symbol": "TSLA",
         "icon": "https://www.google.com/s2/favicons?domain=tesla.com&sz=64"
