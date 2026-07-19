@@ -27,6 +27,22 @@ const MAP_REFRESH_DISTANCE = 805;                    // meters (~0.5 miles) - Wa
 const ENABLE_SPEED_DISABLE = false;                 // Set to false to disable speed-based section disabling
 const SPEED_DISABLE_THRESHOLD = 1.5;                // Speed in mph above which disabling occurs
 
+// Sections in left-nav order. Sections with hideable: false (Settings, Help) can never be hidden by the user.
+export const SECTION_LIST = [
+    { id: 'navigation', label: 'Dashboard', hideable: true },
+    { id: 'news', label: 'News', hideable: true },
+    { id: 'market', label: 'Market', hideable: true },
+    { id: 'weather', label: 'Weather', hideable: true },
+    { id: 'satellite', label: 'Satellite', hideable: true },
+    { id: 'landmarks', label: 'Nearby', hideable: true },
+    { id: 'network', label: 'Network', hideable: true },
+    { id: 'media', label: 'Media', hideable: true },
+    { id: 'reference', label: 'Reference', hideable: true },
+    { id: 'toys', label: 'Toys', hideable: true },
+    { id: 'settings', label: 'Settings', hideable: false },
+    { id: 'about', label: 'Help', hideable: false },
+];
+
 // Module variables
 let currentSection = null;                          // Track the current section
 let lastUpdate = 0;                                 // Timestamp of last location update
@@ -895,28 +911,46 @@ function updateScrollIndicators() {
     bottomFade.style.opacity = canScrollDown ? '1' : '0';
 }
 
-// Function to handle mobile-specific section visibility
-function updateMobileSectionVisibility() {
-    const isMobile = window.matchMedia("only screen and (max-width: 900px)").matches;
-    
-    // Sections to hide on mobile: Dashboard (navigation), Media, Reference
-    const mobileSections = ['navigation', 'media', 'reference'];
-    
-    mobileSections.forEach(sectionId => {
-        const button = document.querySelector(`.section-button[onclick="showSection('${sectionId}')"]`);
-        if (button) {
-            if (isMobile) {
-                button.style.display = 'none';
-            } else {
-                button.style.display = '';
-            }
-        }
-    });
-    
-    // If current section is hidden on mobile, switch to a visible section
-    if (isMobile && currentSection && mobileSections.includes(currentSection)) {
-        // Use 'news' as the fallback since it's always visible on mobile
-        showSection('news');
+// Determine whether a section is currently hidden based on the user's
+// section-visibility preference. Settings and Help are never hidden
+// regardless of stored preference.
+function isSectionHidden(sectionId) {
+    const sectionInfo = SECTION_LIST.find(section => section.id === sectionId);
+    if (sectionInfo && !sectionInfo.hideable) {
+        return false;
+    }
+
+    const hiddenSections = (settings && Array.isArray(settings['hidden-sections'])) ? settings['hidden-sections'] : [];
+    return hiddenSections.includes(sectionId);
+}
+
+// Update a single section button's visibility to reflect its hidden state
+function updateSectionButtonDisplay(sectionId) {
+    const button = document.querySelector(`.section-button[onclick="showSection('${sectionId}')"]`);
+    if (button) {
+        button.style.display = isSectionHidden(sectionId) ? 'none' : '';
+    }
+}
+
+// Find the first section (in nav order) that isn't currently hidden
+function getFirstVisibleSectionId() {
+    const visibleSection = SECTION_LIST.find(section => !isSectionHidden(section.id));
+    return visibleSection ? visibleSection.id : DEFAULT_SECTION;
+}
+
+// Determine the section to show on startup, or when returning with no explicit section in the URL
+function getInitialSection() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('section') || getFirstVisibleSectionId();
+}
+
+// Apply the user's section-visibility settings to the left nav, redirecting
+// away from the current section if it just became hidden
+export function applySectionVisibility() {
+    SECTION_LIST.filter(section => section.hideable).forEach(section => updateSectionButtonDisplay(section.id));
+
+    if (currentSection && isSectionHidden(currentSection)) {
+        showSection(getFirstVisibleSectionId());
     }
 }
 
@@ -1503,12 +1537,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Update scroll indicators when window is resized
     window.addEventListener('resize', () => {
         updateScrollIndicators();
-        updateMobileSectionVisibility();
         updateCarPositionIndicator();
     });
-
-    // Update mobile section visibility on page load
-    updateMobileSectionVisibility();
 
     // Detect user interaction with the Waze iframe (zoom/scroll) to hide the
     // car position indicator until the next automatic map refresh.
@@ -1569,8 +1599,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         window.closePremiumPrecipPopup();
     });
 
-    // Show the initial section from URL parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const initialSection = urlParams.get('section') || DEFAULT_SECTION;
-    showSection(initialSection);
+    // Show the initial section: URL parameter if present, otherwise the first unhidden section
+    showSection(getInitialSection());
 });

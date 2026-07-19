@@ -4,7 +4,7 @@ import { updateNetChartAxisColors } from './net.js';
 import { updatePremiumWeatherDisplay, lastLat, lastLong, updateRainChartAxisColors, updateRadarDisplay, initializeSatelliteSettings, SAT_URLS, currentSatRegion } from './wx.js';
 import { startStockUpdates, stopStockUpdates, fetchStockData } from './stock.js';
 import { refreshMarketData } from './market.js';
-import { currentSection } from './app.js';
+import { currentSection, SECTION_LIST, applySectionVisibility } from './app.js';
 
 // Media query for detecting browser dark mode preference
 const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -41,6 +41,7 @@ const defaultSettings = {
     "show-hourly-stripes": true,
     "show-doppler-radar": true,
     "sat-region": 'us',
+    "hidden-sections": [],
     // Stocks
     "show-price-alt": false,
     "show-stock-indicator": true,
@@ -852,6 +853,69 @@ function updateDefaultNewsSettings() {
     });
 }
 
+// Function to generate section-visibility settings dynamically
+function generateSectionVisibilitySettings() {
+    const container = document.querySelector('#section-visibility-settings');
+    if (!container) return;
+
+    container.replaceChildren();
+
+    SECTION_LIST.filter(section => section.hideable).forEach(section => {
+        container.appendChild(createSectionToggleItem(section));
+    });
+
+    updateSectionVisibilityUI();
+}
+
+function createSectionToggleItem(section) {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'settings-toggle-item';
+    itemDiv.dataset.section = section.id;
+    itemDiv.addEventListener('click', function() {
+        const input = this.querySelector('input');
+        if (input) input.click();
+    });
+
+    const label = document.createElement('label');
+    label.textContent = section.label;
+    itemDiv.appendChild(label);
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.addEventListener('change', function() {
+        toggleSectionVisibility(section.id, this.checked);
+    });
+    itemDiv.appendChild(input);
+
+    const span = document.createElement('span');
+    span.className = 'settings-toggle-slider';
+    itemDiv.appendChild(span);
+
+    return itemDiv;
+}
+
+// Function to handle section-visibility toggles (checked = section shown)
+function toggleSectionVisibility(sectionId, isVisible) {
+    const hidden = new Set(settings['hidden-sections'] || []);
+    if (isVisible) {
+        hidden.delete(sectionId);
+    } else {
+        hidden.add(sectionId);
+    }
+    saveSetting('hidden-sections', Array.from(hidden));
+}
+
+// Function to update section-visibility checkboxes based on current settings
+function updateSectionVisibilityUI() {
+    const hiddenSections = settings['hidden-sections'] || [];
+    SECTION_LIST.filter(section => section.hideable).forEach(section => {
+        const checkbox = document.querySelector(`[data-section="${section.id}"] input`);
+        if (checkbox) {
+            checkbox.checked = !hiddenSections.includes(section.id);
+        }
+    });
+}
+
 // Function to generate stock and index settings dynamically
 function generateStockIndexSettings() {
     const indexContainer = document.querySelector('#stock-index-settings');
@@ -1259,6 +1323,12 @@ function updateSetting(key, value) {
         case 'show-hourly-stripes':
             updatePremiumWeatherDisplay();
             break;
+
+        case 'hidden-sections':
+            updateSectionVisibilityUI();
+            applySectionVisibility();
+            break;
+
         case 'show-stock-indicator':
             // Special handling for the master switch
             // If it's being enabled, start updates
@@ -1387,12 +1457,15 @@ function setControlEnable(key, enabled = true) {
 function initializeSettings() {
     // Load stock/index data and generate settings
     loadStockAndIndexData();
-    
+
     // Load news sources data and generate settings - use setTimeout to ensure DOM is ready
     setTimeout(() => {
         loadNewsSourcesData();
     }, 100);
-    
+
+    // Generate section-visibility settings
+    generateSectionVisibilitySettings();
+
     // Iterate through all keys in the settings object
     for (const key in settings) {
         if (settings.hasOwnProperty(key)) {
